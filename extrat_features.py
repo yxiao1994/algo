@@ -9,11 +9,13 @@ import time
 from sklearn.utils import shuffle
 import numpy as np
 import logging
+from itertools import combinations
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 logger = logging.getLogger(__file__)
 import pandas as pd
+import math
 
 # 存储数据的根目录
 ROOT_PATH = "/mnt/yardcephfs/mmyard/g_wxg_ob_dc/mlhustxiao/algo/data"
@@ -144,6 +146,50 @@ def feed_action_sequence(history_data, f1, f2, start_day=1, before_day=7):
     return seq_feature
 
 
+def feature_idf(history_data, feature):
+    """
+    计算特征的idf
+    :param history_data: DataFrame. 用于统计的数据
+    :param feature: String. 例如userID/authorid/feedid
+    :return:dic. 每个id的idf值
+    """
+    dic = {}
+    for val in history_data[feature].values:
+        dic[val] = dic.get(val, 0) + 1
+
+    file_num = len(history_data)
+    idf_dic = {}
+    for word in dic:
+        if dic[word] >= 5:
+            idf_dic[word] = math.log10(file_num * 1.0 / dic[word])
+    return idf_dic
+
+
+def user_repensentation(history_data, f1, f2):
+    """
+    通过历史行为序列计算用户之间的各个维度相似度
+    :param history_data: DataFrame. 用于统计的数据
+    :param f1: String. 行为，例如read_comment、like
+    :param f2: String. 例如authorid/feedid
+    :return:dic. 用户行为过的序列
+    """
+
+    user_data = history_data[['userid', f1, f2, "date_"]]
+    log = user_data[user_data[f1] > 0]
+    log = log.drop('date_', axis=1)
+
+    dic, items = {}, []
+    for item in log[['userid', f2]].values:
+        if item[1] is None:
+            continue
+        try:
+            dic[item[0]].add(item[1])
+        except:
+            dic[item[0]] = set([item[1]])
+
+    return dic
+
+
 def main():
     t = time.time()
 
@@ -199,6 +245,8 @@ def main():
         for f2 in ['feedid', 'authorid']:
             seq_feature = feed_action_sequence(df, f1, f2)
             data = pd.merge(data, seq_feature, on=[f2, 'date_'], how='left')
+
+    # userID和feedid\authorid交叉
 
     train_data = data[data['date_'] < END_DAY]
     test_data = data[data['date_'] == END_DAY]
