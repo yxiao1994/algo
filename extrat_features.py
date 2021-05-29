@@ -73,7 +73,7 @@ def user_action_sequence(history_data, f1, f2, start_day=1, before_day=7):
     :param start_day: Int. 起始日期
     :param before_day: Int. 时间范围（天数）
     """
-    print('now process sequence feature:' + f1 + '_' + f2)
+    print('now process user sequence feature:' + f1 + '_' + f2)
     user_data = history_data[['userid', f1, f2, "date_"]]
     # if positive:
     user_data = user_data[user_data[f1] > 0]
@@ -104,12 +104,50 @@ def user_action_sequence(history_data, f1, f2, start_day=1, before_day=7):
     return seq_feature
 
 
+def feed_action_sequence(history_data, f1, f2, start_day=1, before_day=7):
+    """
+    统计过去n天对feedid/authorid发生行为的用户序列
+    :param history_data: DataFrame. 用于统计的数据
+    :param f1: String. 行为，例如read_comment、like
+    :param f2: String. 序列特征，例如feedid、authorid
+    :param start_day: Int. 起始日期
+    :param before_day: Int. 时间范围（天数）
+    """
+    print('now process feed sequence feature:' + f1 + '_' + f2)
+    user_data = history_data[['userid', f1, f2, "date_"]]
+    # if positive:
+    user_data = user_data[user_data[f1] > 0]
+    # else:
+    #     user_data = user_data[user_data[f1] == 0]
+    res_arr = []
+    for start in range(start_day, END_DAY - before_day + 1):
+        log = user_data[(user_data["date_"] >= start) & (user_data["date_"] < (start + before_day))]
+        log = log.drop('date_', axis=1)
+
+        dic, items = {}, []
+        for item in log[[f2, 'userid']].values:
+            if item[1] is None:
+                continue
+            try:
+                dic[item[0]].append(str(item[1]))
+            except:
+                dic[item[0]] = [str(item[1])]
+        for key in dic:
+            items.append([key, ' '.join(dic[key])])
+        # 赋值序列特征
+        temp = pd.DataFrame(items)
+        f_name = '_'.join([f2, 'user', f1, 'sequence'])
+        temp.columns = [f2, f_name]
+        temp["date_"] = start + before_day
+        res_arr.append(temp)
+    seq_feature = pd.concat(res_arr)
+    return seq_feature
+
+
 def main():
     t = time.time()
 
     train_df = pd.read_csv(USER_ACTION_PATH)
-    for action in ACTION_LIST:
-        train_df = train_df.drop_duplicates(subset=['userid', 'feedid', action], keep='last')
 
     test_df = pd.read_csv(TEST_FILE_PATH)
     test_df['date_'] = END_DAY
@@ -156,6 +194,11 @@ def main():
         for f2 in ['feedid', 'authorid']:
             seq_feature = user_action_sequence(df, f1, f2)
             data = pd.merge(data, seq_feature, on=['userid', 'date_'], how='left')
+
+    for f1 in FEA_COLUMN_LIST + ['has_action']:
+        for f2 in ['feedid', 'authorid']:
+            seq_feature = feed_action_sequence(df, f1, f2)
+            data = pd.merge(data, seq_feature, on=[f2, 'date_'], how='left')
 
     train_data = data[data['date_'] < END_DAY]
     test_data = data[data['date_'] == END_DAY]
