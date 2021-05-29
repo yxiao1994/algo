@@ -170,7 +170,7 @@ def user_repensentation(history_data, f1, f2):
     通过历史行为序列计算用户之间的各个维度相似度
     :param history_data: DataFrame. 用于统计的数据
     :param f1: String. 行为，例如read_comment、like
-    :param f2: String. 例如authorid/feedid
+    :param f2: String. 例如authorid、feedid
     :return:dic. 用户行为过的序列
     """
 
