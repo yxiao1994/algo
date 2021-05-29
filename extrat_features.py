@@ -83,7 +83,7 @@ def user_action_sequence(history_data, f1, f2, start_day=1, before_day=7):
     for start in range(start_day, END_DAY - before_day + 1):
         log = user_data[(user_data["date_"] >= start) & (user_data["date_"] < (start + before_day))]
         log = log.drop('date_', axis=1)
-    
+
         dic, items = {}, []
         for item in log[['userid', f2]].values:
             if item[1] is None:
@@ -117,21 +117,21 @@ def main():
     for column in diff_columns:
         test_df[column] = -1
     for f in ["read_comment", "like", "click_avatar", "forward", "comment", "follow", "favorite"]:
-        test_df[f] = np.random.randint(0,2,size=[len(test_df)])
+        test_df[f] = np.random.randint(0, 2, size=[len(test_df)])
     features = train_df.columns
     df = pd.concat([train_df[features], test_df[features]])
-    
+
     feed_info = pd.read_csv(FEED_INFO_PATH)
     df = pd.merge(df, feed_info, on='feedid', how='left')
 
     df[["authorid", "bgm_song_id", "bgm_singer_id"]] += 1  # 0 用于填未知
     df[["authorid", "bgm_song_id", "bgm_singer_id", "videoplayseconds"]] = \
-        df[["authorid", "bgm_song_id", "bgm_singer_id", "videoplayseconds"]].fillna(0) 
+        df[["authorid", "bgm_song_id", "bgm_singer_id", "videoplayseconds"]].fillna(0)
     df["videoplayseconds"] = np.log(df["videoplayseconds"] + 1.0)
     df[["authorid", "bgm_song_id", "bgm_singer_id"]] = \
         df[["authorid", "bgm_song_id", "bgm_singer_id"]].astype(int)
     df['has_action'] = df['read_comment'] + df['like'] + df['click_avatar'] + df['favorite'] + \
-                       df['forward'] + df['comment'] + df['follow'] 
+                       df['forward'] + df['comment'] + df['follow']
     # 8-14天的数据用于构造标签
     data = df[df['date_'] >= LABEL_START_DAY]
     if not os.path.exists(VOCAB_DATA_PATH):
@@ -161,8 +161,8 @@ def main():
     test_data = data[data['date_'] == END_DAY]
 
     test_data.to_csv(os.path.join(DATASET_PATH, "test_data.csv"), index=False)
-    pos = train_data[train_data['has_action']==1]
-    neg = train_data[train_data['has_action']==0]
+    pos = train_data[train_data['has_action'] == 1]
+    neg = train_data[train_data['has_action'] == 0]
     print(pos.shape, neg.shape)
     neg = neg.sample(frac=SAMPLE_RATE)
     print(neg.shape)
@@ -171,6 +171,6 @@ def main():
     df.to_csv(os.path.join(DATASET_PATH, "train_data.csv"), index=False)
     print('Time cost: %.2f s' % (time.time() - t))
 
+
 if __name__ == "__main__":
     main()
-

@@ -22,6 +22,7 @@ def init_network(model, method='xavier', exclude='embedding', seed=123):
             else:
                 pass
 
+
 def train(config, model, train_iter, dev_iter):
     start_time = time.time()
     model.train()
@@ -37,7 +38,7 @@ def train(config, model, train_iter, dev_iter):
             # print(trains)
             dense_features, single_id_concat, multi_id_concat, mask_concat, labels, _ = \
                 (x.to(config.device) for x in batch)
-            #print(dense_features, single_id_concat, multi_id_concat, mask_concat, labels)
+            # print(dense_features, single_id_concat, multi_id_concat, mask_concat, labels)
             outputs = model(dense_features, single_id_concat, multi_id_concat, mask_concat)
 
             model.zero_grad()
@@ -105,5 +106,3 @@ def evaluate(config, model, data_iter, test=False):
     if test:
         return predict_all, uauc, loss_total / len(data_iter)
     return uauc, loss_total / len(data_iter)
-
-

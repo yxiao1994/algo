@@ -27,7 +27,7 @@ class Config(object):
 
         self.require_improvement = 500  # 若超过1000batch效果还没提升，则提前结束训练
         self.num_epochs = 10  # epoch数
-        self.train_batch_size = 1024   # mini-batch大小
+        self.train_batch_size = 1024  # mini-batch大小
         self.eval_batch_size = 1024  # mini-batch大小
         self.learning_rate = 2e-4  # 学习率
         self.embedding_size = 512
@@ -137,16 +137,15 @@ class Model(nn.Module):
             mask = mask_concat[:, :, i]
             embed_max = embed.max(1)[0].float()
             feature_embedded.append(embed_max)
-            #print(embed)
-            #print(mask)
-            #embed_mean = (embed * mask.unsqueeze(-1)).sum(1) / mask.sum(1).unsqueeze(-1)
-            #feature_embedded.append(embed_mean.float())
+            # print(embed)
+            # print(mask)
+            # embed_mean = (embed * mask.unsqueeze(-1)).sum(1) / mask.sum(1).unsqueeze(-1)
+            # feature_embedded.append(embed_mean.float())
         feature_embedded.append(dense_features.float())
 
         merged = torch.cat(feature_embedded, dim=1)
         res = []
         for layer in self.output_layers:
             res.append(layer(merged))
-        #print(res)
+        # print(res)
         return torch.cat(res, dim=1)
-

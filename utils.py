@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 
 def weighted_loss(outputs, labels):
-    #print(outputs, labels)
+    # print(outputs, labels)
     weights = [0.4, 0.3, 0.2, 0.1]
     loss = 0.0
     for i, weight in enumerate(weights):

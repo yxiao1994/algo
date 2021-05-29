@@ -77,4 +77,3 @@ class TextDataset(Dataset):
             mask_concat.append(torch.FloatTensor(multi_id_mask[f]).view(-1, 1))
         mask_concat = torch.cat(mask_concat, dim=1)
         return (dense_features, single_id_concat, multi_id_concat, mask_concat, label, userid)
-
