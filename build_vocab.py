@@ -7,6 +7,8 @@
 from extrat_features import *
 from collections import Counter
 import pickle
+from gensim.models import Word2Vec
+import codecs
 from feature_config import FEATURE_MAP_DIC
 
 
@@ -83,4 +85,3 @@ if __name__ == "__main__":
             feed_embedding_matrix[key] = emb
     np.save(os.path.join(DATASET_PATH, 'pretrained_feed_emb'), feed_embedding_matrix)
     pickle.dump(vocab_dic, open(os.path.join(DATASET_PATH, 'vocab_dic.txt'), 'wb'))
-

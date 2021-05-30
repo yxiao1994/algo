@@ -34,6 +34,8 @@ class Config(object):
         self.vocab = vocab
         self.dropout_rate = 0.5
         self.class_num = 4
+        self.max_seq_len = 128
+        self.inter_feature_num = 32
 
 
 class EmbeddingLayer(nn.Module):
@@ -90,9 +92,46 @@ class FullyConnectedLayer(nn.Module):
         return self.output_layer(self.fc(x)) if self.sigmoid else self.fc(x)
 
 
+class CrossNet(nn.Module):
+    """The Cross Network part of Deep&Cross Network model,
+    which leans both low and high degree cross feature.
+      Input shape
+        - 2D tensor with shape: ``(batch_size, units)``.
+      Output shape
+        - 2D tensor with shape: ``(batch_size, units)``.
+      Arguments
+        - **in_features** : Positive integer, dimensionality of input features.
+        - **input_feature_num**: Positive integer, shape(Input tensor)[-1]
+        - **layer_num**: Positive integer, the cross layer number
+        - **l2_reg**: float between 0 and 1. L2 regularizer strength applied to the kernel weights matrix
+        - **seed**: A Python integer to use as random seed.
+      References
+        - [Wang R, Fu B, Fu G, et al. Deep & cross network for ad click predictions[C]//Proceedings of the ADKDD'17. ACM, 2017: 12.](https://arxiv.org/abs/1708.05123)
+    """
+
+    def __init__(self, in_features, layer_num=2):
+        super(CrossNet, self).__init__()
+        self.layer_num = layer_num
+        self.kernels = torch.nn.ParameterList(
+            [nn.Parameter(nn.init.xavier_normal_(torch.empty(in_features, 1))) for _ in range(self.layer_num)])
+        self.bias = torch.nn.ParameterList(
+            [nn.Parameter(nn.init.zeros_(torch.empty(in_features, 1))) for _ in range(self.layer_num)])
+
+    def forward(self, inputs):
+        x_0 = inputs.unsqueeze(2)
+        x_l = x_0
+        for i in range(self.layer_num):
+            xl_w = torch.tensordot(x_l, self.kernels[i], dims=([1], [0]))
+            dot_ = torch.matmul(x_0, xl_w)
+            x_l = dot_ + self.bias[i] + x_l
+        x_l = torch.squeeze(x_l, dim=2)
+        return x_l
+
+
 class Model(nn.Module):
     def __init__(self, config):
         super(Model, self).__init__()
+        self.max_seq_len = config.max_seq_len
         embedding_size = config.embedding_size
         self.feature_embedding_dict = dict()
         pre_feed_embedding = torch.from_numpy(np.load(os.path.join(DATASET_PATH, 'pretrained_feed_emb.npy')))
@@ -125,9 +164,13 @@ class Model(nn.Module):
                                                                    embedding_dim=embedding_size))
         self.single_id_embedding_list = nn.ModuleList(self.single_id_embedding_list)
         self.multi_id_embedding_list = nn.ModuleList(self.multi_id_embedding_list)
-        fc_layer = FullyConnectedLayer(
-            input_size=embedding_size * (len(SINGLE_ID_FEATURES) + len(MULTI_ID_FEATURES)) + len(DENSE_FEATURES),
-            hidden_size=[200, 80, 1], bias=[True, True, False], activation='relu', sigmoid=True)
+        feature_dim = embedding_size * (len(SINGLE_ID_FEATURES) + len(MULTI_ID_FEATURES) +
+                                        2 * config.inter_feature_num) + len(DENSE_FEATURES)
+        self.cross_net = CrossNet(feature_dim)
+        for param in self.cross_net.parameters():
+            param.requires_grad = True
+        fc_layer = FullyConnectedLayer(input_size=feature_dim, hidden_size=[200, 80, 1],
+                                       bias=[True, True, False], activation='relu', sigmoid=True)
         self.output_layers = nn.ModuleList([
             copy.deepcopy(fc_layer)
             for _ in range(config.class_num)])
@@ -138,18 +181,32 @@ class Model(nn.Module):
             emb = self.single_id_embedding_list[i](single_id_concat[:, :, i].squeeze())
             feature_embedded.append(emb.float())
 
+        userid_emb = torch.cat([feature_embedded[0].unsqueeze(1) for _ in range(self.max_seq_len)], dim=1)
+        feedid_emb = torch.cat([feature_embedded[1].unsqueeze(1) for _ in range(self.max_seq_len)], dim=1)
+        authorid_emb = torch.cat([feature_embedded[2].unsqueeze(1) for _ in range(self.max_seq_len)], dim=1)
         for i, f in enumerate(MULTI_ID_FEATURES):
             embed = self.multi_id_embedding_list[i](multi_id_concat[:, :, i]).float()
+            output = embed
+            if f.endswith('user_sequence'):
+                output = torch.cat([embed, userid_emb - embed, userid_emb * embed],
+                                   dim=-1)
+            elif 'feedid' in f:
+                output = torch.cat([embed, feedid_emb - embed, feedid_emb * embed],
+                                   dim=-1)
+            elif 'authorid' in f:
+                output = torch.cat([embed, authorid_emb - embed, authorid_emb * embed],
+                                   dim=-1)
+            else:
+                pass
             mask = mask_concat[:, :, i]
-            embed_max = embed.max(1)[0].float()
+            embed_max = output.max(1)[0].float()
             feature_embedded.append(embed_max)
-            # print(embed)
-            # print(mask)
-            # embed_mean = (embed * mask.unsqueeze(-1)).sum(1) / mask.sum(1).unsqueeze(-1)
-            # feature_embedded.append(embed_mean.float())
+
         feature_embedded.append(dense_features.float())
 
         merged = torch.cat(feature_embedded, dim=1)
+        merged = self.cross_net(merged)
+
         res = []
         for layer in self.output_layers:
             res.append(layer(merged))

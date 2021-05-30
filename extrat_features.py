@@ -9,7 +9,7 @@ import time
 from sklearn.utils import shuffle
 import numpy as np
 import logging
-from itertools import combinations
+import pickle
 from tqdm import tqdm
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
@@ -194,7 +194,7 @@ def feature_idf(history_data, feature):
     return idf_dic
 
 
-def user_repensentation(history_data):
+def has_action_dic(history_data, feature):
     """
     通过历史行为序列计算用户之间的各个维度相似度
     :param history_data: DataFrame. 用于统计的数据
@@ -204,8 +204,12 @@ def user_repensentation(history_data):
     log = history_data[['userid', 'feedid', 'has_action']]
     log = log[log['has_action'] > 0]
 
-    dic, items = {}, []
-    for item in log[['userid', 'feedid']].values:
+    dic = {}
+    if feature == 'user':
+        x = ['userid', 'feedid']
+    else:
+        x = ['feedid', 'userid']
+    for item in log[x].values:
         if item[1] is None:
             continue
         try:
@@ -335,10 +339,14 @@ def main():
 
     # user和序列交互
     history_data = df[df['date_'] < LABEL_START_DAY]
-    item_dic = user_repensentation(history_data)
+    item_dic = has_action_dic(history_data, 'user')
     feed_idf = feature_idf(history_data, 'feedid')
     for f1 in ['like', 'has_action']:
         data = sequence_ad_interaction(data, f1, 'feedid', item_dic, feed_idf)
+
+    # 存储用户序列用于预训练用户embedding
+    user_sequence = has_action_dic(history_data, 'feedid')
+    pickle.dump(user_sequence, open(os.path.join(DATASET_PATH, "user_sequence.txt"), 'wb'))
 
     # 对数据做处理
     sum_feature = [f for f in data.columns if 'sum' in f
