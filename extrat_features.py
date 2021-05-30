@@ -342,13 +342,12 @@ def main():
 
     # 对数据做处理
     sum_feature = [f for f in data.columns if 'sum' in f
-                   or 'max' in f or 'count' in f]
+                   or 'max' in f or 'count' in f or 'avg' in f]
     for f in sum_feature:
         data[f] = data[f].fillna(0)
         data[f] = np.log(data[f] + 1.0)
 
-    mean_feature = [f for f in data.columns if 'mean' in f
-                    or 'avg' in f]
+    mean_feature = [f for f in data.columns if 'mean' in f]
     for f in mean_feature:
         data[f] = data[f].fillna(0)
 
