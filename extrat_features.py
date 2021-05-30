@@ -10,6 +10,7 @@ from sklearn.utils import shuffle
 import numpy as np
 import logging
 from itertools import combinations
+from tqdm import tqdm
 
 LOG_FORMAT = "%(asctime)s - %(levelname)s - %(message)s"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
@@ -59,6 +60,34 @@ def static_feature(history_data, dim, start_day=1, before_day=7, agg=['sum', 'me
         temp = x.groupby([dim]).agg(agg).reset_index()
         features = [dim + '_' + '_'.join(x) for x in temp.columns.values]
         features[0] = dim
+        temp.columns = features
+        temp["date_"] = start + before_day
+        res_arr.append(temp)
+    dim_feature = pd.concat(res_arr)
+    return dim_feature
+
+
+def cross_feature(history_data, f1, f2, start_day=1, before_day=7, agg=['count', 'sum', 'mean']):
+    """
+    统计交叉特征
+    :param history_data: DataFrame. 用于统计的数据
+    :param f1: String. 待统计的特征
+    :param f2: String. 待统计的特征
+    :param start_day: Int. 起始日期
+    :param before_day: Int. 时间范围（天数）
+    :param agg: String. 统计方法
+    """
+    print('now process cross feature:{}_{}'.format(f1, f2))
+    user_data = history_data[[f1, f2, "date_"] + FEA_COLUMN_LIST]
+    res_arr = []
+    for start in range(start_day, END_DAY - before_day + 1):
+        x = user_data[(user_data["date_"] >= start) & (user_data["date_"] < (start + before_day))]
+        x = x.drop('date_', axis=1)
+        temp = x.groupby([f1, f2]).agg(agg).reset_index()
+        dim = f1 + '_' + f2 + '_cross'
+        features = [dim + '_' + '_'.join(x) for x in temp.columns.values]
+        features[0] = f1
+        features[1] = f2
         temp.columns = features
         temp["date_"] = start + before_day
         res_arr.append(temp)
@@ -138,7 +167,7 @@ def feed_action_sequence(history_data, f1, f2, start_day=1, before_day=7):
             items.append([key, ' '.join(dic[key])])
         # 赋值序列特征
         temp = pd.DataFrame(items)
-        f_name = '_'.join([f2, 'user', f1, 'sequence'])
+        f_name = '_'.join([f1, f2, 'user', 'sequence'])
         temp.columns = [f2, f_name]
         temp["date_"] = start + before_day
         res_arr.append(temp)
@@ -165,21 +194,18 @@ def feature_idf(history_data, feature):
     return idf_dic
 
 
-def user_repensentation(history_data, f1, f2):
+def user_repensentation(history_data):
     """
     通过历史行为序列计算用户之间的各个维度相似度
     :param history_data: DataFrame. 用于统计的数据
-    :param f1: String. 行为，例如read_comment、like
-    :param f2: String. 例如authorid、feedid
     :return:dic. 用户行为过的序列
     """
 
-    user_data = history_data[['userid', f1, f2, "date_"]]
-    log = user_data[user_data[f1] > 0]
-    log = log.drop('date_', axis=1)
+    log = history_data[['userid', 'feedid', 'has_action']]
+    log = log[log['has_action'] > 0]
 
     dic, items = {}, []
-    for item in log[['userid', f2]].values:
+    for item in log[['userid', 'feedid']].values:
         if item[1] is None:
             continue
         try:
@@ -188,6 +214,71 @@ def user_repensentation(history_data, f1, f2):
             dic[item[0]] = set([item[1]])
 
     return dic
+
+
+def get_user_similarity(user1, user2, item_dic, idf_dic):
+    if user1 not in item_dic or user2 not in item_dic:
+        return [0, 0, 0]
+    inter = item_dic[user1] & item_dic[user2]
+    n1 = len(item_dic[user1])
+    n2 = len(item_dic[user2])
+    common_count = len(inter)
+    common_rate = common_count / max(n1, n2)
+    common_idf = 0
+    for feedid in inter:
+        common_idf += idf_dic.get(feedid, 3.0)
+    return [common_count, common_rate, common_idf]
+
+
+def get_sequence_similarity(ad_user, user_list, item_dic, idf_dic):
+    count_list, rate_list, idf_list = [], [], []
+    try:
+        for user in user_list.split():
+            user = int(user)
+            common_count, common_rate, common_idf = \
+                get_user_similarity(ad_user, user, item_dic, idf_dic)
+            count_list.append(common_count)
+            rate_list.append(common_rate)
+            idf_list.append(common_idf)
+    except:
+        pass
+    common_count_avg = np.mean(count_list) if len(count_list) > 0 else 0.0
+    common_count_max = np.max(count_list) if len(count_list) > 0 else 0.0
+    common_count_sum = np.sum(count_list) if len(count_list) > 0 else 0.0
+
+    common_rate_avg = np.mean(rate_list) if len(rate_list) > 0 else 0.0
+    common_rate_max = np.max(rate_list) if len(rate_list) > 0 else 0.0
+    common_rate_sum = np.sum(rate_list) if len(rate_list) > 0 else 0.0
+
+    common_idf_avg = np.mean(idf_list) if len(idf_list) > 0 else 0.0
+    common_idf_max = np.max(idf_list) if len(idf_list) > 0 else 0.0
+    common_idf_sum = np.sum(idf_list) if len(idf_list) > 0 else 0.0
+    return [common_count_avg, common_count_max, common_count_sum, \
+            common_rate_avg, common_rate_max, common_rate_sum, \
+            common_idf_avg, common_idf_max, common_idf_sum]
+
+
+def sequence_ad_interaction(df, f1, f2, item_dic, idf_dic):
+    """
+    候选user和历史user行为序列之间的交互
+    :param df: DataFrame. 用于统计的数据
+    :param f1: String. 行为，例如read_comment、like
+    :param f2: String. 序列特征，例如feedid、authorid
+    :return:
+    """
+    f_name = '_'.join([f1, f2, 'user', 'sequence'])
+    features = []
+    for ad_user, user_list in tqdm(df[['userid', f_name]].values):
+        features.append(get_sequence_similarity(ad_user, user_list, item_dic, idf_dic))
+    features = np.array(features)
+    feature_name_list = [
+        'common_count_avg', 'common_count_max', 'common_count_sum',
+        'common_rate_avg', 'common_rate_max', 'common_rate_sum',
+        'common_idf_avg', 'common_idf_max', 'common_idf_sum',
+    ]
+    for i, f in enumerate(feature_name_list):
+        df['_'.join([f1, f2, f])] = features[:, i]
+    return df
 
 
 def main():
@@ -221,19 +312,15 @@ def main():
     if not os.path.exists(VOCAB_DATA_PATH):
         data[data['date_'] < END_DAY].to_csv(VOCAB_DATA_PATH, index=False)
 
+    # 统计类特征
     for dim in ['userid', 'feedid', 'authorid']:
         dim_feature = static_feature(df, dim)
         data = pd.merge(data, dim_feature, on=[dim, 'date_'], how='left')
 
-    # 对数据做处理
-    sum_feature = [f for f in data.columns if 'sum' in f]
-    for f in sum_feature:
-        data[f] = data[f].fillna(0)
-        data[f] = np.log(data[f] + 1.0)
-
-    mean_feature = [f for f in data.columns if 'mean' in f]
-    for f in mean_feature:
-        data[f] = data[f].fillna(0)
+    f1 = 'userid'
+    for f2 in ['feedid', 'authorid']:
+        dim_feature = cross_feature(df, f1, f2)
+        data = pd.merge(data, dim_feature, on=[f1, f2, 'date_'], how='left')
 
     # 用户行为序列
     for f1 in FEA_COLUMN_LIST + ['has_action']:
@@ -246,7 +333,24 @@ def main():
             seq_feature = feed_action_sequence(df, f1, f2)
             data = pd.merge(data, seq_feature, on=[f2, 'date_'], how='left')
 
-    # userID和feedid\authorid交叉
+    # userID和序列交互
+    history_data = df[df['date_'] < LABEL_START_DAY]
+    item_dic = user_repensentation(history_data)
+    feed_idf = feature_idf(history_data, 'feedid')
+    for f1 in ['like', 'has_action']:
+        data = sequence_ad_interaction(data, f1, 'feedid', item_dic, feed_idf)
+
+    # 对数据做处理
+    sum_feature = [f for f in data.columns if 'sum' in f
+                   or 'max' in f or 'count' in f]
+    for f in sum_feature:
+        data[f] = data[f].fillna(0)
+        data[f] = np.log(data[f] + 1.0)
+
+    mean_feature = [f for f in data.columns if 'mean' in f
+                    or 'avg' in f]
+    for f in mean_feature:
+        data[f] = data[f].fillna(0)
 
     train_data = data[data['date_'] < END_DAY]
     test_data = data[data['date_'] == END_DAY]
