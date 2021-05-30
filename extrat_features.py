@@ -333,7 +333,7 @@ def main():
             seq_feature = feed_action_sequence(df, f1, f2)
             data = pd.merge(data, seq_feature, on=[f2, 'date_'], how='left')
 
-    # userID和序列交互
+    # user和序列交互
     history_data = df[df['date_'] < LABEL_START_DAY]
     item_dic = user_repensentation(history_data)
     feed_idf = feature_idf(history_data, 'feedid')
