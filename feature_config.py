@@ -41,15 +41,6 @@ DENSE_FEATURES = ['userid_read_comment_sum', 'userid_read_comment_mean',
                   'userid_authorid_cross_follow_count', 'userid_authorid_cross_follow_sum',
                   'userid_authorid_cross_follow_mean', 'userid_authorid_cross_favorite_count',
                   'userid_authorid_cross_favorite_sum', 'userid_authorid_cross_favorite_mean',
-                  'like_feedid_common_count_avg', 'like_feedid_common_count_max',
-                  'like_feedid_common_count_sum', 'like_feedid_common_rate_avg',
-                  'like_feedid_common_rate_max', 'like_feedid_common_rate_sum',
-                  'like_feedid_common_idf_avg', 'like_feedid_common_idf_max',
-                  'like_feedid_common_idf_sum', 'has_action_feedid_common_count_avg',
-                  'has_action_feedid_common_count_max', 'has_action_feedid_common_count_sum',
-                  'has_action_feedid_common_rate_avg', 'has_action_feedid_common_rate_max',
-                  'has_action_feedid_common_rate_sum', 'has_action_feedid_common_idf_avg',
-                  'has_action_feedid_common_idf_max', 'has_action_feedid_common_idf_sum'
                   ]
 SINGLE_ID_FEATURES = ['userid', 'feedid', 'authorid', 'bgm_song_id', 'bgm_singer_id']
 MULTI_ID_FEATURES = ['description', 'ocr', 'asr', 'manual_keyword_list',
@@ -105,3 +96,4 @@ FEATURE_MAP_DIC = {
     'has_action_feedid_user_sequence': 'userid',
     'has_action_authorid_user_sequence': 'userid'
 }
+

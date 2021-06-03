@@ -7,10 +7,8 @@
 from extrat_features import *
 from collections import Counter
 import pickle
-from gensim.models import Word2Vec
-import codecs
 from feature_config import FEATURE_MAP_DIC
-
+FEED_EMBEDDING = '/mnt/wfs/mmcommwfssz/user_hoonghu/algo/data/feed_pca_100d.pkl'
 
 def feature_vaocb(df, feature, feature_type):
     """
@@ -75,13 +73,14 @@ if __name__ == "__main__":
     for f in FEATURE_MAP_DIC:
         vocab_dic[f] = vocab_dic[FEATURE_MAP_DIC[f]]
 
-    feed_embedding_matrix = np.zeros((len(vocab_dic['feedid']), 512))
-    emb_df = pd.read_csv(FEED_EMBEDDINGS)
-    for feedid, emb_str in emb_df.values:
+    feed_embedding_matrix = np.zeros((len(vocab_dic['feedid']), 100))
+    emb_dic = pickle.load(open(FEED_EMBEDDING, 'rb'))     
+    for feedid in emb_dic:
+        emb = emb_dic[feedid]
         feedid = str(feedid)
-        emb = np.asarray(emb_str.split(), dtype='float')
         if feedid in vocab_dic['feedid']:
             key = vocab_dic['feedid'][feedid]
             feed_embedding_matrix[key] = emb
     np.save(os.path.join(DATASET_PATH, 'pretrained_feed_emb'), feed_embedding_matrix)
     pickle.dump(vocab_dic, open(os.path.join(DATASET_PATH, 'vocab_dic.txt'), 'wb'))
+

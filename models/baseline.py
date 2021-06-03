@@ -29,8 +29,8 @@ class Config(object):
         self.num_epochs = 10  # epoch数
         self.train_batch_size = 1024  # mini-batch大小
         self.eval_batch_size = 1024  # mini-batch大小
-        self.learning_rate = 2e-4  # 学习率
-        self.embedding_size = 512
+        self.learning_rate = 1e-2  # 学习率
+        self.embedding_size = 100
         self.vocab = vocab
         self.dropout_rate = 0.5
         self.class_num = 4
@@ -126,7 +126,7 @@ class Model(nn.Module):
         self.single_id_embedding_list = nn.ModuleList(self.single_id_embedding_list)
         self.multi_id_embedding_list = nn.ModuleList(self.multi_id_embedding_list)
         fc_layer = FullyConnectedLayer(
-            input_size=embedding_size * (len(SINGLE_ID_FEATURES) + len(MULTI_ID_FEATURES)) + len(DENSE_FEATURES),
+            input_size=embedding_size * (len(SINGLE_ID_FEATURES) +  len(MULTI_ID_FEATURES)) + len(DENSE_FEATURES),
             hidden_size=[200, 80, 1], bias=[True, True, False], activation='relu', sigmoid=True)
         self.output_layers = nn.ModuleList([
             copy.deepcopy(fc_layer)
@@ -145,8 +145,8 @@ class Model(nn.Module):
             feature_embedded.append(embed_max)
             # print(embed)
             # print(mask)
-            # embed_mean = (embed * mask.unsqueeze(-1)).sum(1) / mask.sum(1).unsqueeze(-1)
-            # feature_embedded.append(embed_mean.float())
+            #embed_mean = (embed * mask.unsqueeze(-1)).sum(1) / (mask.sum(1).unsqueeze(-1) + 0.001)
+            #feature_embedded.append(embed_mean.float())
         feature_embedded.append(dense_features.float())
 
         merged = torch.cat(feature_embedded, dim=1)
@@ -155,3 +155,4 @@ class Model(nn.Module):
             res.append(layer(merged))
         # print(res)
         return torch.cat(res, dim=1)
+
